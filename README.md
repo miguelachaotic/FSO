@@ -1,4 +1,4 @@
-## Nuestro repositorio de FSO!!
+# Nuestro repositorio de FSO!!
 
 Escrito por Miguel Ángel y David; este repositorio tiene algunas prácticas de c 
 
