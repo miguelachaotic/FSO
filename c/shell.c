@@ -36,7 +36,7 @@ int main(int argc, char** argv){
         buffer = malloc(MAX_CMD_LENGTH*sizeof(char));
         read(0 , buffer, MAX_CMD_LENGTH*sizeof(char));     
         // En este punto ya tenemos en el buffer la cadena obtenida por el usuario.
-        //Ahora comprobaremos si corresponde a alguna cadena de comando
+        // Ahora comprobaremos si corresponde a alguna cadena de comando
         buffer = strtok(buffer, "\n"); // Elimino el \n de la cadena
         
         
@@ -102,6 +102,5 @@ void vaciar_buffer(char *buffer)
         buffer[i] = '\0';
     }
 }
-
 
 

@@ -32,7 +32,6 @@ int main (int argc, char ** argv)
   // Si no hay ningún error:
 
   while ( (a = fgetc(pFich0)) != EOF ) {
-    printf("a = %c\n", a);
     fputc(a, pFich1);
   }
 
