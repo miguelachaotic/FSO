@@ -56,23 +56,13 @@ int main(int argc, char** argv){
         while(token != NULL)
         {   
             
-            printf("%s\n", token);
-            //args = (char**)realloc(args, (contador_args + 2) * sizeof(char*));
-            
             args[contador_args] = token;
             
             contador_args++;
-            printf("%d\n", contador_args);
 
             token = strtok(NULL, delimitador);
         }
-
-    
-
-
-
-        
-        
+       
         if(!strcmp(args[0], "copia"))
         {
             printf("Ejecuta copia");
