@@ -73,19 +73,19 @@ int main(int argc, char** argv){
 
         
         
-        if(!strcmp(token, "copia"))
+        if(!strcmp(args[0], "copia"))
         {
-         
+            printf("Ejecuta copia");
         } 
-        else if (!strcmp(token, "muestra"))
+        else if (!strcmp(args[0], "muestra"))
         {
-            // Hace muestra
+            printf("Ejecuta muestra");
         }
-        else if(!strcmp(token, "lista"))
+        else if(!strcmp(args[0], "lista"))
         {
-            // Hace lista
+            printf("Ejecuta lista");
         }
-        else if(!strcmp(token, "salir"))
+        else if(!strcmp(args[0], "salir"))
         {
             free(buffer);
             free(args);
@@ -97,6 +97,7 @@ int main(int argc, char** argv){
         }
 
         vaciar_buffer(buffer);
+        contador_args = 0;
     }
     
 
