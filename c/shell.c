@@ -56,20 +56,19 @@ int main(int argc, char** argv){
        
         if(!strcmp(args[0], "copia"))
         {
-            if (contador_args != 3) {
-                printf("WARNING: Numero incorrecto de argumentos\n");
-            }
-            pid = fork();
-            if (pid < 0) {
-                fprintf(stderr, "El hijo no se ha podido generar\n");
-            } else if (pid == 0) {
-                file = "./copia";
-                strcpy(args[0], file);
-                execvp(file, args);
-            } else {
-                wait(NULL);
-                printf("Hijo terminó\n");
-            }
+            printf ("\tCreamos otro proceso usando fork () ...\n");
+            if ( fork () == 0 ) {
+                estado = execvp (args[0], args);
+                printf ("\t\t%s ha tomado el control de este proceso hijo. Esto no se ejecutara a menos que termine de manera
+anormal!\n", args[0]) ;
+                if ( estado != -1) {
+                    printf ("\t\ tEl proceso no termino correctamente \n");
+                    exit (1) ;
+                 }
+             } else {
+                 printf (" Esta linea se ejecuta por el proceso padre \n") ;
+                 wait ( NULL );
+             }
         } 
         else if (!strcmp(args[0], "muestra"))
         {
