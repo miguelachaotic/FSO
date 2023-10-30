@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 
@@ -9,19 +10,9 @@
 #define MAX_ARG_LENGTH 64
 
 
-void vaciar_buffer(char *buffer)
-{
-    for(int i = 0; i < MAX_CMD_LENGTH; i++)
-    {
-        buffer[i] = '\0';
-    }
-}
-
-
-
+void vaciar_buffer(char *buffer);
 
 int main(int argc, char** argv){
-
     
     char *buffer;
     char *delimitador = " ";
@@ -29,6 +20,8 @@ int main(int argc, char** argv){
     char **args;
     int contador_args = 0;
     int tam_antes;
+    pid_t pid;
+    const char * file;
 
 
     if(argc > 1){
@@ -52,10 +45,8 @@ int main(int argc, char** argv){
         
         args = (char**)malloc(tam_antes);
         
-        
         while(token != NULL)
         {   
-            
             args[contador_args] = token;
             
             contador_args++;
@@ -65,15 +56,28 @@ int main(int argc, char** argv){
        
         if(!strcmp(args[0], "copia"))
         {
-            printf("Ejecuta copia");
+            if (contador_args != 3) {
+                printf("WARNING: Numero incorrecto de argumentos\n");
+            }
+            pid = fork();
+            if (pid < 0) {
+                fprintf(stderr, "El hijo no se ha podido generar\n");
+            } else if (pid == 0) {
+                file = "./copia";
+                strcpy(args[0], file);
+                execvp(file, args);
+            } else {
+                wait(NULL);
+                printf("Hijo terminó\n");
+            }
         } 
         else if (!strcmp(args[0], "muestra"))
         {
-            printf("Ejecuta muestra");
+            printf("Ejecuta muestra\n");
         }
         else if(!strcmp(args[0], "lista"))
         {
-            printf("Ejecuta lista");
+            printf("Ejecuta lista\n");
         }
         else if(!strcmp(args[0], "salir"))
         {
@@ -89,8 +93,15 @@ int main(int argc, char** argv){
         vaciar_buffer(buffer);
         contador_args = 0;
     }
-    
-
-
-
 }
+
+void vaciar_buffer(char *buffer)
+{
+    for(int i = 0; i < MAX_CMD_LENGTH; i++)
+    {
+        buffer[i] = '\0';
+    }
+}
+
+
+
