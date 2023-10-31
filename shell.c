@@ -6,6 +6,7 @@
 
 
 #define PROMPT "chiquishell~~> "
+#define RUTA ""
 #define MAX_CMD_LENGTH 256
 #define MAX_ARG_LENGTH 64
 
@@ -55,21 +56,21 @@ int main(int argc, char** argv){
             token = strtok(NULL, delimitador);
         }
 
+        args[contador_args] = NULL;
+
         if (args[0] == NULL) {
             printf("Cadena vacia\n");
         }
-        if(!strcmp(args[0], "./copia"))
+
+
+        if(!strcmp(args[0], "copia"))
         {
-            printf ("\tCreamos otro proceso usando fork () ...\n");
             if ( fork () == 0 ) {
-                estado = execvp (args[0], args);
+                estado = execvp ("copia", args);
                 printf ("%s toma el control de este hijo. Esto no se debería ejecutar!\n", args[0]) ;
-                if ( estado != -1) {
-                    printf ("\tEl proceso no termino correctamente \n");
-                    exit (1) ;
-                 }
+                return estado;
+
              } else {
-                 printf (" Esta linea se ejecuta por el proceso padre \n") ;
                  wait ( NULL );
              }
         } 
