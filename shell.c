@@ -22,6 +22,7 @@ int main(int argc, char** argv){
     int tam_antes;
     pid_t pid;
     const char * file;
+    int estado;
 
 
     if(argc > 1){
@@ -53,16 +54,18 @@ int main(int argc, char** argv){
 
             token = strtok(NULL, delimitador);
         }
-       
-        if(!strcmp(args[0], "copia"))
+
+        if (args[0] == NULL) {
+            printf("Cadena vacia\n");
+        }
+        if(!strcmp(args[0], "./copia"))
         {
             printf ("\tCreamos otro proceso usando fork () ...\n");
             if ( fork () == 0 ) {
                 estado = execvp (args[0], args);
-                printf ("\t\t%s ha tomado el control de este proceso hijo. Esto no se ejecutara a menos que termine de manera
-anormal!\n", args[0]) ;
+                printf ("%s toma el control de este hijo. Esto no se debería ejecutar!\n", args[0]) ;
                 if ( estado != -1) {
-                    printf ("\t\ tEl proceso no termino correctamente \n");
+                    printf ("\tEl proceso no termino correctamente \n");
                     exit (1) ;
                  }
              } else {
