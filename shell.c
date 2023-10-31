@@ -6,7 +6,6 @@
 
 
 #define PROMPT "chiquishell~~> "
-#define RUTA ""
 #define MAX_CMD_LENGTH 256
 #define MAX_ARG_LENGTH 64
 
@@ -66,8 +65,8 @@ int main(int argc, char** argv){
         if(!strcmp(args[0], "copia"))
         {
             if ( fork () == 0 ) {
-                estado = execvp ("copia", args);
-                printf ("%s toma el control de este hijo. Esto no se debería ejecutar!\n", args[0]) ;
+                estado = execvp ("./copia", args);
+                printf ("ERROR: no se pudo ejecutar el comando %s\n", args[0]) ;
                 return estado;
 
              } else {
