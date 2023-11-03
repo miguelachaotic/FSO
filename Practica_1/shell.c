@@ -1,226 +1,218 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/wait.h>
 
-
-#define PROMPT "<~~chiquishell~~> "
-#define EXIT_ERR 1
 #define MAX_CMD_LENGTH 256
-#define MAX_ARGS 20
+#define PROMPT "<~~chiquishell~~> "
+#define MAX_ARGS_COUNT 20
 
 
+char* crear_puntero(int tam);
 
-void vaciar_buffer(char *buffer)
-{
-    for(int i = 0; i < MAX_CMD_LENGTH; i++)
-    {
-        buffer[i] = '\0';
-    }
-}
+void eliminar_puntero(char* puntero);
 
-char* crear_buffer()
-{
-    char* nuevo_buffer;
-    nuevo_buffer = (char*)malloc(MAX_CMD_LENGTH*sizeof(char));
-    return nuevo_buffer;
-}
+void print_args(char** args, int num_args);
 
-void eliminar_buffer(char* buffer)
-{
-    free(buffer);
-}
 
-void print_args(char** args, int num_args)
-{
-    for(int i = 0; i < num_args; i++)
-    {
-        printf("%s\n", args[i]);
-    }
-}
-
-void reset_args(char** args)
-{
-    int i = 0;
-    while(args[i] != NULL)
-    {
-        free(args[i]);
-        i++;
-    }
-}
 
 
 
 
 int main(int argc, char** argv)
 {
-
-    char *buffer;
-    const char *delimitador = " \n";
+    char* buffer_entrada;
+    const char* delimitador = " \n";
     char caracter;
-    char *token;
-    char *args[MAX_ARGS];
+    char* token;
+    char** args = (char **)malloc(MAX_ARGS_COUNT * sizeof(char*));
     int contador_args = 0;
-    int anterior;
-    
     pid_t pid;
-    const char *file_path;
+    const char* ruta_fichero;
     int sigue = 1;
     int estado_hijo = 0;
     int indice_buffer = 0;
-    
 
-    if(argc > 1){
-        fprintf(stderr, "USO: shell [sin argumentos]\n"); 
+    if(argc > 1)
+    {
+        fprintf(stderr, "Uso: shell [sin argumentos]\n");
         return -1;
     }
-    do
-    {   
+    while(1)
+    {
+        buffer_entrada = crear_puntero(MAX_CMD_LENGTH);
         
-        buffer = crear_buffer(); // Crea un nuevo puntero buffer
-        vaciar_buffer(buffer);
-        if(write(1, PROMPT, strlen(PROMPT)) == -1)
+        if(!write(1, PROMPT, strlen(PROMPT)))
         {
-            fprintf(stderr,"Error en la escritura.");
-            exit(EXIT_ERR);
+            fprintf(stderr, "Error en la escritura del prompt.\n");
+            return -1;
         }
-        
-        do
-        {      
-            
-            if(read(0 , &caracter, 1) != -1 && sigue)
+
+        while(sigue) // Este bucle lee todo el string de la entrada.
+        {
+            if(read(0, &caracter, sizeof(char)))
             {
-                
-                if(caracter == '\n') 
+                if(caracter == '\n')
                 {
                     sigue = 0;
                 }
-                buffer[indice_buffer] = caracter;  
+                buffer_entrada[indice_buffer] = caracter;
+                indice_buffer++;
             }
-            indice_buffer++;
         }
-        while (sigue);
-        buffer[indice_buffer] = '\0';
-        
-        
-        
-        
-            
-        // En este punto ya tenemos en el buffer la cadena obtenida por el usuario.
-        //Ahora comprobaremos si corresponde a alguna cadena de comando
-        
-        if(buffer[0] != '\n')
+        buffer_entrada[indice_buffer] = '\0';
+
+        // En este punto el buffer de entrada ya está con el string que necesitamos
+
+        if(buffer_entrada[0] != '\n')
         {
-            token = strtok(buffer, delimitador); // Cojo el primer argumento
-            strcat(token, "\0");
+            token = strtok(buffer_entrada, delimitador);
         }
         else { token = NULL; }
-        while(token != NULL && contador_args < MAX_ARGS)
-        {    
-            args[contador_args] = (char*)malloc((strlen(token)+1) * sizeof(char));
+
+        while (token != NULL)
+        {
+            args[contador_args] = crear_puntero(strlen(token) + 1);
             strcpy(args[contador_args], token);
             contador_args++;
             token = strtok(NULL, delimitador);
-            strcat(token, "\0");
-            
-            
         }
-        //printf("%s\n", buffer);
-        print_args(args, anterior);
-        if(args[0] != NULL)
+        args[contador_args++] = NULL;
+        
+        //print_args(args, contador_args);
+        
+        if(args[0])
         {
-            
-            if(!strcmp(args[0], "copia"))
+            if(!strcmp(args[0], "copia")) // Devuelve 0 si son iguales
             {
+                if(contador_args - 2 != 2)
+                {
+                    printf("Warning: numero incorrecto de argumentos para copia.\n");
+                }
                 pid = fork();
                 if(pid < 0)
                 {
-                    fprintf(stderr, "No se ha podido crear el hijo.");
+                    fprintf(stderr, "Error al crear el proceso hijo.\n");
                     return -1;
                 }
-                else if(pid == 0)
+                else if(pid == 0) // Ejecuta el hijo
                 {
-                    file_path = "./copia";
-                    estado_hijo = execvp(file_path, args);
+                    ruta_fichero = "./copia";
+                    strcpy(args[0], ruta_fichero);
+                    estado_hijo = execvp(ruta_fichero, args);
                     if(estado_hijo)
                     {
-                        fprintf(stderr, "Error en la ejecucion del proceso hijo.\n");
+                        fprintf(stderr, "Ha habido un error de ejecucion en el hijo\n");
                         return -1;
                     }
                 }
                 else
-                {   
+                {
                     wait(NULL);
                 }
-            } 
+            }
+            else if (!strcmp(args[0], "lista"))
+            {
+                if(contador_args - 2 > 1)
+                {
+                    printf("Warning: numero incorrecto de argumentos.\n");
+                }
+                pid = fork();
+                if(pid < 0)
+                {
+                    fprintf(stderr, "Error al crear el proceso hijo.\n");
+                    return -1;
+                }
+                else if (pid == 0)
+                {
+                    ruta_fichero = "/bin/ls";
+                    strcpy(args[0], ruta_fichero);
+                    estado_hijo = execvp(ruta_fichero, args);
+                    if(estado_hijo)
+                    {
+                        fprintf(stderr, "Ha habido un error de ejecucion en el hijo\n");
+                        return -1;
+                    }
+                }
+                else
+                {
+                    wait(NULL);
+                }
+                
+            }
             else if (!strcmp(args[0], "muestra"))
             {
+                if(contador_args - 2 > 1)
+                {
+                    printf("Warning: has introducido 2 o mas parametros.\n");
+                }
                 pid = fork();
                 if(pid < 0)
                 {
                     fprintf(stderr, "Error al crear el proceso hijo.\n");
                     return -1;
                 }
-                else if(pid == 0)
+                else if (pid == 0)
                 {
-                    file_path = "/bin/cat";
-                    strcpy(args[0], file_path);
-                    //print_args(args, contador_args);
-                    estado_hijo = execvp(file_path, args);
+                    ruta_fichero = "/bin/cat";
+                    strcpy(args[0], ruta_fichero);
+                    estado_hijo = execvp(ruta_fichero, args);
                     if(estado_hijo)
                     {
-                        fprintf(stderr, "Error en la ejecucion del proceso hijo.\n");
+                        fprintf(stderr, "Ha habido un error de ejecucion en el hijo\n");
+                        return -1;
                     }
                 }
                 else
                 {
                     wait(NULL);
                 }
+                
+                
             }
-            else if(!strcmp(args[0], "lista"))
+            else if (!strcmp(args[0], "salir")) 
             {
-                pid = fork();
-                if(pid < 0)
-                {
-                    fprintf(stderr, "Error al crear el proceso hijo.\n");
-                    return -1;
+                for(int i = 0; i < contador_args; i++){
+                    free(args[i]);
                 }
-                else if(pid == 0)
-                {
-                    file_path = "/bin/ls";
-                    strcpy(args[0], file_path);
-                    estado_hijo = execvp(file_path, args);
-                    if(estado_hijo)
-                    {
-                        fprintf(stderr, "Error en la ejecucion del proceso hijo.\n");
-                    }
-                }
-                else
-                {
-                    wait(NULL);
-                }
-            }
-            else if(!strcmp(args[0], "salir"))
-            {
-                reset_args(args);
-                free(buffer);
-                return 0; // Termina el programa
+                free(args);
+                eliminar_puntero(buffer_entrada);
+                return 0;
             }
             else
             {
-                printf("Comando desconocido\n");
+                printf("Comando desconocido.\n");
             }
+            
+            
         }
-        
-        eliminar_buffer(buffer);
-        reset_args(args);
+
         sigue = 1;
-        anterior = contador_args;
         indice_buffer = 0;
         contador_args = 0;
-        
-    
-    }while(1);
+    }
 
+}
+
+char* crear_puntero(int tam)
+{
+    if(tam > MAX_CMD_LENGTH)
+    {
+        return NULL;
+    }
+    return (char*)malloc(tam * sizeof(char));
+}
+
+void eliminar_puntero(char* puntero)
+{
+    free(puntero);
+}
+
+void print_args(char** args, int num_args)
+{
+    for(int i = 0; i < num_args; i++)
+    {
+        printf("Argumento %d: %s\n", i, args[i]);
+    }
 }
