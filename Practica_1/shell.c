@@ -62,7 +62,7 @@ int main(int argc, char** argv)
           token = NULL; 
         }
 
-        // TODO: preguntar que hace cada cosa aquí
+        // [!] TODO: No termino de enterarme de que hace cada cosa aquí
         while (token != NULL) {
             args[contador_args] = crear_puntero(strlen(token) + 1);
             strcpy(args[contador_args], token);
