@@ -11,8 +11,6 @@
 
 
 char* crear_puntero(int tam);
-
-void print_args(char **args, int num_args);
 int ejecuta_hijo(char **args);
 
 
@@ -140,14 +138,6 @@ char* crear_puntero(int tam)
         return NULL;
     }
     return (char*)malloc(tam * sizeof(char));
-}
-
-void print_args(char** args, int num_args)
-{
-    for(int i = 0; i < num_args; i++) 
-    {
-        printf("Argumento %d: %s\n", i, args[i]);
-    }
 }
 
 int ejecuta_hijo (char** args) {
