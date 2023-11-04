@@ -16,14 +16,17 @@ int main (int argc, char ** argv)
   if (argc != 3){
     fprintf(stderr, "USO: copia [archivo_org] [archivo_dest]\n");
     exit (EXIT_FAILURE);
-  } else if (strcmp(ruta0, ruta1) == 0) {
+  } 
+  else if (strcmp(ruta0, ruta1) == 0) {
     fprintf(stderr, "ERROR: los 2 archivos no pueden ser el mismo\n");
     exit (EXIT_FAILURE);
-  } else if ((pFich1 = fopen(ruta1, "r")) != NULL) {
+  }
+  else if ((pFich1 = fopen(ruta1, "r")) != NULL) {
     fprintf(stderr, "ERROR: el archivo destino ya existe\n");
     fclose(pFich1);
     exit(EXIT_FAILURE);
-  } else if ((pFich0 = fopen(ruta0, "r")) == NULL) {
+  } 
+  else if ((pFich0 = fopen(ruta0, "r")) == NULL) {
     fprintf(stderr, "ERROR: el archivo origen no existe\n");
     exit(EXIT_FAILURE);
 	}
