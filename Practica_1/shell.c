@@ -22,8 +22,6 @@ int main(int argc, char** argv)
     char* token;
     char** args = (char **)malloc(MAX_ARGS_COUNT * sizeof(char*));
     int contador_args = 0;
-
-    const char* ruta_fichero;
     int sigue = 1;
     int indice_buffer = 0;
 
