@@ -48,6 +48,11 @@ void* productor(void* args){
         fflush(stdout);
 
         buffer[i%TAMAÑO_BUFFER] = i;
+        // Si es el caracter es el último, se mandan tantas señales cómo consumidores haya
+        if (i == TERMINADOR)
+            for (int n = 0; n<=4; n++)
+                sem_post(&hay_dato);
+
         sem_post(&hay_dato);
     }
     pthread_exit(NULL);
@@ -57,19 +62,29 @@ void* consumidor(void* args){
     int id = (int) args;
     printf("Consumidor %d creado\n", id);
 
-    while (sigue_consum) {
+    while (1) {
         sem_wait(&hay_dato);
         sem_wait(&puedo_consumir);  // Espera a que otro consumidor que haya entrado a 
                                     // la sección crítica actualice el valor del contador global
                                     // sino, puede acceder a un dato ya consumido y se sumen 2 al contador
 
-        if (buffer[contador_consum%TAMAÑO_BUFFER] == TERMINADOR) {
-            printf("PROD FINAL ENCONTRADO (por %d)\n", id);
-            sigue_consum = 0;
+        // Comprueba la bandera de si ya se ha condumido el último dato
+        if (!sigue_consum) {
+            printf("Eliminando consumidor %d...\n", id); fflush(stdout);
+            pthread_exit(NULL);
         }
+        // Comprueba si el dato es el terminador
+        if (buffer[contador_consum%TAMAÑO_BUFFER] == TERMINADOR) {
+            printf("PROD FINAL ENCONTRADO (por %d)\n", id); fflush(stdout);
+            sigue_consum = 0;
+            for (int i=0; i<=4; i++)
+                sem_post(&puedo_consumir);
+        }
+
+        // Consume normalmente (imprime por pantalla)
         printf("cons no. %d, pos %d = %d\n", id, contador_consum%TAMAÑO_BUFFER, buffer[contador_consum%TAMAÑO_BUFFER]);   
         fflush(stdout);
-        contador_consum ++; // Aumento el contador global
+        contador_consum++; // Aumento el contador global
 
         sem_post(&hay_espacio);
         sem_post(&puedo_consumir);
