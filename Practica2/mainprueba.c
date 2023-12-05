@@ -35,8 +35,8 @@ DATO_BUFFER* buffer_compartido;
 
 int main(int argc, char** argv)
 {
-    int tam_buffer, num_consumidores, num_productores, *ids_consumidores;
-    FILE* archivo_salida;
+    int tam_buffer, num_consumidores, num_productores, ids_consumidores[1000];
+    FILE* fichero_salida;
     FILE** ficheros_entrada;
     char ruta_fichero[256]; // Almacena la ruta (relativa o absoluta) a un fichero.
     pthread_t *hilos_productores, *hilos_consumidores, hilo_facturador;
@@ -82,18 +82,18 @@ int main(int argc, char** argv)
         exit(1);
     }
     // Abrimos el archivo en lectura para comprobar que existe
-    if((archivo_salida = fopen(argv[2], "r")) != NULL)
+    if((fichero_salida = fopen(argv[2], "r")) != NULL)
     {
-        fclose(archivo_salida);
-        if((archivo_salida = fopen(argv[2], "w")) == NULL){
+        fclose(fichero_salida);
+        if((fichero_salida = fopen(argv[2], "w")) == NULL){
             fprintf(stderr, "Error en la apertura del archivo de salida.\n");
             exit(1);
         }
-        fclose(archivo_salida);
+        fclose(fichero_salida);
         printf("WARNING: EL ARCHIVO SELECCIONADO SE SOBREESCRIBIRÁ.\n");
     }
 
-    if((archivo_salida = fopen(argv[2], "a")) == NULL)
+    if((fichero_salida = fopen(argv[2], "a")) == NULL)
     {
         fprintf(stderr, "Error en la apertura del archivo de salida.\n");
         exit(1);
@@ -103,7 +103,6 @@ int main(int argc, char** argv)
     for(int i = 0; i < num_productores; i++)
     {
         sprintf(ruta_fichero, "%s/proveedor%d.dat",argv[1], i);
-        printf("Nombre de fichero: %s\n", ruta_fichero);
         if((ficheros_entrada[i] = fopen(ruta_fichero, "r")) == NULL)
         {
             fprintf(stderr, "Error al abrir el fichero %d\n", i);
@@ -130,25 +129,22 @@ int main(int argc, char** argv)
         fprintf(stderr, "Error en la creación del vector de hilos consumidores.\n");
         exit(1);
     }
+    printf("He creado bien el vector de consumidores\n");
 
-    if((datos_productores = (DATO_PRODUCTOR*)malloc(num_productores*sizeof(pthread_t))) == NULL)
+    if((datos_productores = (DATO_PRODUCTOR*)malloc(num_productores*sizeof(DATO_PRODUCTOR))) == NULL)
     {
         fprintf(stderr, "Error en la creación del vector de datos de los productores.\n");
         exit(1);
     }
 
-    if((ids_consumidores = (int*) malloc(num_consumidores*sizeof(int))) == NULL)
-    {
-        fprintf(stderr, "Error en la creación del vector de ids de consumidores.\n");
-        exit(1);
-    }
-
     printf("Numero productores = %d\n", num_productores);
+    printf("Número de consumidores = %d\n", num_consumidores);
     // Lanzamos los hilos productores
     for(int i = 0; i < num_productores; i++)
     {
         datos_productores[i].fp = ficheros_entrada[i];
         datos_productores[i].id_hilo = i;
+        printf("Id del hilo: %d\n", datos_productores[i].id_hilo);
         if(pthread_create(&hilos_productores[i], NULL, productor, (void*) &datos_productores[i]))
         {
             fprintf(stderr, "No se ha podido crear el hilo productor número %d.\n", i);
@@ -168,7 +164,9 @@ int main(int argc, char** argv)
         }
     }
 
-    if(pthread_create(&hilo_facturador, NULL, facturador, NULL/*TODO Añadir args */ ))
+
+    // Lanzamos hilo facturador
+    if(pthread_create(&hilo_facturador, NULL, facturador, (void*)fichero_salida))
     {
         fprintf(stderr, "Error al crear el hilo facturador.\n");
         exit(1);
@@ -181,19 +179,36 @@ int main(int argc, char** argv)
             fprintf(stderr, "Error al esperar al hilo productor número %d\n", i+1);
             exit(1);
         }
-    }
-    free(hilos_productores);
-
-    for(int i = 0; i < num_productores; i++)
-    {
         if(fclose(ficheros_entrada[i]))
         {
-            fprintf(stderr, "Error al cerrar el fichero %d\n", i+1);
+            fprintf(stderr, "Error al cerrar el fichero proveedor%d.dat\n", i);
             exit(1);
         }
     }
-    free(ficheros_entrada);
 
+
+    for(int i = 0; i < num_consumidores; i++)
+    {
+        if(pthread_join(hilos_consumidores[i], NULL))
+        {
+            fprintf(stderr, "Error al esperar al hilo consumidor número %d.\n", i+1);
+            exit(1);
+        }
+    }
+
+
+
+    if(pthread_join(hilo_facturador, NULL))
+    {
+        fprintf(stderr, "Error al esperar al hilo facturador.\n");
+        exit(1);
+    }
+
+    if(fclose(fichero_salida))
+    {
+        fprintf(stderr, "Error al cerrar el fichero de salida.\n");
+        exit(1);
+    }
 
 
     exit(0);
@@ -230,10 +245,15 @@ void* productor(void* args)
 
 void* consumidor(void* args)
 {
+    int i = 0;
+    while(i++ < 1000000); // Esto hay que quitarlo, solo simula que hace operaciones
+    printf("Consumidor terminado con id %d\n", *(int*) args);
     pthread_exit(NULL);
 }
 
 void* facturador(void* args)
 {
+    printf("Facturador escribe en fichero de salida %ld\n", *(long*) args);
+    printf("Facturador terminado.\n");
     pthread_exit(NULL);
 }
