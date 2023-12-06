@@ -90,8 +90,6 @@ int main(int argc, char** argv)
     DATO_PRODUCTOR *datos_productores;
 
 
-    // Es un dato temporal, se reutiliza con cada proveedor distinto
-
     if(argc != 6)
     {
         fprintf(stderr, "Uso incorrecto de la vending.\nUso correcto:\n ./vending <path> <outputFile> <T> <P> <C>\n");
