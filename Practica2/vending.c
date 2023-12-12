@@ -478,6 +478,11 @@ void* consumidor(void* args)
         {
             sem_post(&mutex_contador_productores);
             sem_wait(&hay_dato);
+
+            if (contador_productores == total_productores) {
+                pthread_exit(NULL);
+            }
+
             sem_wait(&mutex_indice_consumidores);
             dato_buffer = buffer_compartido[indice_consumidores];
             indice_consumidores = (indice_consumidores + 1) % tam_buffer;
@@ -488,7 +493,14 @@ void* consumidor(void* args)
                 sem_wait(&mutex_contador_productores);
                 printf("Encontrado el EOF número %d.\n", contador_productores);
                 contador_productores++;
+                //
+                if (contador_productores == total_productores) {
+                    for (int x = 0; x <= total_consumidores; x++)
+                        sem_post(&hay_dato);
+                }
+                //
                 sem_post(&mutex_contador_productores);
+                sem_post(&hay_dato);
             }
             else
             {
@@ -525,15 +537,7 @@ void* facturador(void* args)
                             dato_lista_enlazada.id_consumidor, total);
 
     sem_wait(&mutex_fichero_salida);
-
     sem_post(&mutex_fichero_salida);
-
-
-
-
-
-
-
 
     pthread_exit(NULL);
 }
