@@ -316,7 +316,6 @@ int main(int argc, char** argv)
             fprintf(stderr, "Error al esperar al hilo consumidor con id %d.\n", i);
             exit(1);
         }
-        printf("Recogido el consumidor %d\n", i);
     }
 
     free(hilos_consumidores);
@@ -449,10 +448,6 @@ void* productor(void* args)
         fprintf(stderr, "Error al cerrar el fichero número %d.\n", dato_args.id_hilo);
         exit(1);
     }
-
-    printf("Invalidos: %d. Válidos: %d\n", invalidos, validos);
-    printf("Productor %d termina.\n", dato_args.id_hilo);
-
     pthread_exit(NULL);
 }
 
@@ -472,15 +467,12 @@ void* consumidor(void* args)
         sem_wait(&mutex_contador_datos);
         if((contador_productores == 0 && contador_datos == 0))
         {
-            printf("He entrado %d\n", id_hilo);
             sem_post(&mutex_contador_datos);
             sem_post(&mutex_contador_productores);
-            printf("Consumidor %d termina.\n", id_hilo);
             sem_wait(&mutex_contador_datos);
             contador_datos++;
             sem_post(&mutex_contador_datos);
             sem_post(&hay_dato);
-            printf("Ya he señalado que hay dato\n");
             pthread_exit(NULL);
         }
         else
@@ -488,19 +480,18 @@ void* consumidor(void* args)
             sem_post(&mutex_contador_datos);
             sem_post(&mutex_contador_productores);
 
+
+
             sem_wait(&hay_dato);
             sem_wait(&mutex_indice_consumidores);
             dato_buffer = buffer_compartido[indice_consumidores];
             indice_consumidores = (indice_consumidores + 1) % tam_buffer;
+            sem_wait(&mutex_contador_datos);
+            contador_datos--;
+            sem_post(&mutex_contador_datos);
             sem_post(&mutex_indice_consumidores);
             sem_post(&hay_espacio);
-            //printf("Id: %d, caracter: %c\n", dato_buffer.id_hilo, dato_buffer.c);
-            sem_wait(&mutex_contador_datos);
 
-            contador_datos--;
-
-            printf("Consumidor con id %d lee Contador datos = %d\n",id_hilo, contador_datos);
-            sem_post(&mutex_contador_datos);
 
         }
     }
