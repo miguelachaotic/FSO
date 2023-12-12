@@ -243,16 +243,19 @@ int main(int argc, char** argv)
         fprintf(stderr, "Error al inicializar el semáforo 'mutex_fichero_salida'\n");
         exit(1);
     }
+    /*
     if(sem_init(&hay_dato_lista_enlazada, 0, 0))
     {
         fprintf(stderr, "Error al inicializar el semáforo 'hay_dato_lista_enlazada'\n");
         exit(1);
     }
+
     if(sem_init(&mutex_indice_lista_enlazada, 0, 0))
     {
         fprintf(stderr, "Error al inicializar el semáforo 'mutex_indice_lista_enlazada'\n");
         exit(1);
     }
+     */
     if(sem_init(&mutex_contador_datos, 0, 1))
     {
         fprintf(stderr, "Error al inicializar el semáforo 'mutex_contador_datos'\n");
@@ -425,20 +428,15 @@ void* productor(void* args)
             sem_wait(&hay_espacio); // Esperamos a que haya espacio en el buffer
             sem_wait(&mutex_indice_productores); // Exclusión mutua en el índice
             buffer_compartido[indice_productores] = nuevo_dato;
+            indice_productores = (indice_productores + 1)%tam_buffer;
             sem_post(&mutex_indice_productores);
             sem_post(&hay_dato); // Señalamos que ha entrado un nuevo dato
 
             sem_wait(&mutex_contador_datos); // Exclusión mutua contador datos
             contador_datos++;
             sem_post(&mutex_contador_datos);
-
-            if(nuevo_dato.id_hilo != -1)
-            {
-                contador_caracteres[nuevo_dato.c - 'a']++;
-                sem_wait(&mutex_indice_productores);
-                indice_productores = (indice_productores + 1)%tam_buffer;
-                sem_post(&mutex_indice_productores);
-            }
+            // Incrementamos contador
+            contador_caracteres[nuevo_dato.c - 'a']++;
         }
         else
         {
@@ -451,8 +449,10 @@ void* productor(void* args)
         fprintf(stderr, "Error al cerrar el fichero número %d.\n", dato_args.id_hilo);
         exit(1);
     }
+
     printf("Invalidos: %d. Válidos: %d\n", invalidos, validos);
     printf("Productor %d termina.\n", dato_args.id_hilo);
+
     pthread_exit(NULL);
 }
 
@@ -472,10 +472,15 @@ void* consumidor(void* args)
         sem_wait(&mutex_contador_datos);
         if((contador_productores == 0 && contador_datos == 0))
         {
+            printf("He entrado %d\n", id_hilo);
             sem_post(&mutex_contador_datos);
             sem_post(&mutex_contador_productores);
             printf("Consumidor %d termina.\n", id_hilo);
+            sem_wait(&mutex_contador_datos);
+            contador_datos++;
+            sem_post(&mutex_contador_datos);
             sem_post(&hay_dato);
+            printf("Ya he señalado que hay dato\n");
             pthread_exit(NULL);
         }
         else
@@ -491,8 +496,12 @@ void* consumidor(void* args)
             sem_post(&hay_espacio);
             //printf("Id: %d, caracter: %c\n", dato_buffer.id_hilo, dato_buffer.c);
             sem_wait(&mutex_contador_datos);
+
             contador_datos--;
+
+            printf("Consumidor con id %d lee Contador datos = %d\n",id_hilo, contador_datos);
             sem_post(&mutex_contador_datos);
+
         }
     }
 
@@ -531,3 +540,5 @@ int caracter_valido(char c)
 {
     return (c >= 'a' && c <= 'j');
 }
+
+
