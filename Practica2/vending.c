@@ -10,6 +10,7 @@
 #define MAX_BUFFER 5000
 
 
+
 typedef struct dato_buffer
 {
     char c;
@@ -21,7 +22,6 @@ typedef struct dato_productor
     int id_hilo; // identificación del hilo que produce datos
     char *path;
     FILE* fichero_salida; // Puntero al fichero donde escribe datos
-
 
 } DATO_PRODUCTOR;
 
@@ -36,6 +36,9 @@ typedef struct dato_lista_enlazada
 
 
 
+
+/* DECLARACIÓN DE MÉTODOS */
+
 int esnum(char* cadena);
 
 void* productor(void* args);
@@ -48,10 +51,7 @@ DATO_BUFFER crear_dato_buffer(FILE* fp, int id_hilo);
 
 int caracter_valido(char c);
 
-
-
-
-DATO_BUFFER* buffer_compartido;
+/* SEMÁFOROS */
 
 sem_t hay_dato;
 
@@ -63,11 +63,21 @@ sem_t mutex_indice_consumidores;
 
 sem_t mutex_contador_productores;
 
+sem_t mutex_contador_datos;
+
+sem_t mutex_contador_consumidores;
+
 sem_t mutex_fichero_salida;
+
+sem_t mutex_bandera_terminado;
 
 sem_t mutex_indice_lista_enlazada;
 
 sem_t hay_dato_lista_enlazada;
+
+/* RECURSOS COMPARTIDOS */
+
+DATO_BUFFER* buffer_compartido;
 
 int indice_productores = 0;
 
@@ -75,22 +85,23 @@ int indice_consumidores = 0;
 
 int indice_lista_enlazada = 0;
 
-int contador_productores = 0;
+int contador_productores;
 
-int total_productores;
+int contador_datos;
 
-int total_consumidores;
+int num_consumidores;
 
 int tam_buffer;
 
-int *validos_productor;
+int num_productores;
 
+int bandera_consumidores_terminado = 0;
 
-DATO_LISTA_ENLAZADA lista_enlazada[1000]; //Para hacer pruebas usamos un vector primero
+DATO_LISTA_ENLAZADA lista_enlazada[MAX_CONSUMIDORES]; //Para hacer pruebas usamos un vector primero
 
 int main(int argc, char** argv)
 {
-    int num_consumidores, num_productores, ids_consumidores[1000];
+    int ids_consumidores[1000];
     FILE* fichero_salida;
     FILE ** ficheros_entrada;
     char ruta_fichero[256]; // Almacena la ruta (relativa o absoluta) a un fichero.
@@ -205,14 +216,8 @@ int main(int argc, char** argv)
         fprintf(stderr, "Error en la creación del vector de datos de los productores.\n");
         exit(1);
     }
-    if((validos_productor = (int*)malloc(num_productores*sizeof(int))) == NULL)
-    {
-        fprintf(stderr, "Error al crear el vector de elementos válidos de los productores.\n");
-        exit(1);
-    }
 
-    total_productores = num_productores;
-    total_consumidores = num_consumidores;
+
 
     if(sem_init(&hay_espacio, 0, tam_buffer))
     {
@@ -244,16 +249,33 @@ int main(int argc, char** argv)
         fprintf(stderr, "Error al inicializar el semáforo 'mutex_fichero_salida'\n");
         exit(1);
     }
+
     if(sem_init(&hay_dato_lista_enlazada, 0, 0))
     {
         fprintf(stderr, "Error al inicializar el semáforo 'hay_dato_lista_enlazada'\n");
         exit(1);
     }
-    if(sem_init(&mutex_indice_lista_enlazada, 0, 0))
+    if(sem_init(&mutex_indice_lista_enlazada, 0, 1))
     {
         fprintf(stderr, "Error al inicializar el semáforo 'mutex_indice_lista_enlazada'\n");
         exit(1);
     }
+    if(sem_init(&mutex_contador_datos, 0, 1))
+    {
+        fprintf(stderr, "Error al inicializar el semáforo 'mutex_contador_datos'\n");
+        exit(1);
+    }
+    if(sem_init(&mutex_contador_consumidores, 0, 1))
+    {
+        fprintf(stderr, "Error al inicializar el semáforo 'mutex_contador_consumidores.\n");
+        exit(1);
+    }
+    if(sem_init(&mutex_bandera_terminado, 0, 1))
+    {
+        fprintf(stderr, "Error al inicializar el semáforo 'mutex_bandera_terminado'\n");
+        exit(1);
+    }
+    contador_productores = num_productores;
 
     // Lanzamos los hilos productores
     for(int i = 0; i < num_productores; i++)
@@ -354,7 +376,7 @@ void* productor(void* args)
     char cadena_imprimible_fichero[256];
     char cadena_tipos_caracter[10][64]; // 10 arrays de carácteres
     char ruta_fichero[256];
-    int sigue = 1, validos = -1, invalidos = 0, i;
+    int sigue = 1, validos = 0, invalidos = 0, totales = 0, i;
     for(i = 0; i < 10; i++)
     {
         contador_caracteres[i] = 0;
@@ -378,60 +400,62 @@ void* productor(void* args)
     }
     while(sigue)
     {
+
         nuevo_dato = crear_dato_buffer(fichero_entrada, dato_args.id_hilo);
-        if(caracter_valido(nuevo_dato.c) || nuevo_dato.c == EOF)
+        if(nuevo_dato.c == EOF)
         {
-            validos++;
-            sem_wait(&hay_espacio); // Esperamos a que haya espacio en el buffer
-            sem_wait(&mutex_indice_productores); // Exclusión mutua en el índice
-            buffer_compartido[indice_productores] = nuevo_dato;
-            sem_post(&mutex_indice_productores);
-            sem_post(&hay_dato); // Señalamos que ha entrado un nuevo dato
-            if(nuevo_dato.c == EOF)
+            sem_wait(&mutex_contador_productores);
+            contador_productores--;
+            sem_post(&mutex_contador_productores);
+            // Ocurre cuando el carácter leído es EOF
+            sigue = 0;
+            sprintf(cadena_imprimible_fichero, "Proveedor %d:\n"
+                                               "Productos procesados: %d.\n"
+                                               "Productos inválidos: %d.\n"
+                                               "Productos válidos: %d.\n",
+                    dato_args.id_hilo, totales, invalidos, validos);
+            for(i = 0; i < 10; i++)
             {
-                printf("EOF encontrado %d\n", nuevo_dato.id_hilo);
+                sprintf(cadena_tipos_caracter[i], "%d de tipo \"%c\"\n", contador_caracteres[i], (char)(i + 'a'));
             }
-            if(nuevo_dato.id_hilo != -1)
+            // Exclusión mutua en el fichero de salida
+            sem_wait(&mutex_fichero_salida);
+            if(fwrite(cadena_imprimible_fichero, 256, 1, fichero_salida) == 0)
             {
-                contador_caracteres[nuevo_dato.c - 'a']++;
-                sem_wait(&mutex_indice_productores);
-                indice_productores = (indice_productores + 1)%tam_buffer;
-                sem_post(&mutex_indice_productores);
+                fprintf(stderr, "Error al escribir datos en el fichero de salida.\n");
+                exit(1);
             }
-            else
+            for(i = 0; i < 10; i++)
             {
-                // Ocurre cuando el carácter leído es EOF
-                sigue = 0;
-                sprintf(cadena_imprimible_fichero, "Proveedor %d:\n"
-                                                   "Productos procesados: %d.\n"
-                                                   "Productos inválidos: %d.\n"
-                                                   "Productos válidos: %d.\n",
-                        dato_args.id_hilo, validos + invalidos,
-                        invalidos, validos);
-                for(i = 0; i < 10; i++)
-                {
-                    sprintf(cadena_tipos_caracter[i], "%d de tipo \"%c\"\n", contador_caracteres[i], (char)(i + 'a'));
-                }
-                // Exclusión mutua en el fichero de salida
-                sem_wait(&mutex_fichero_salida);
-                if(fwrite(cadena_imprimible_fichero, 256, 1, fichero_salida) == 0)
+                if(fwrite(cadena_tipos_caracter[i], 64, 1, fichero_salida) == 0)
                 {
                     fprintf(stderr, "Error al escribir datos en el fichero de salida.\n");
                     exit(1);
                 }
-                for(i = 0; i < 10; i++)
-                {
-                    if(fwrite(cadena_tipos_caracter[i], 64, 1, fichero_salida) == 0)
-                    {
-                        fprintf(stderr, "Error al escribir datos en el fichero de salida.\n");
-                        exit(1);
-                    }
-                }
-                sem_post(&mutex_fichero_salida);
             }
+            sem_post(&mutex_fichero_salida);
+
+        }
+        else if(caracter_valido(nuevo_dato.c))
+        {
+            totales++;
+            validos++;
+            sem_wait(&hay_espacio); // Esperamos a que haya espacio en el buffer
+            sem_wait(&mutex_indice_productores); // Exclusión mutua en el índice
+            buffer_compartido[indice_productores] = nuevo_dato;
+            indice_productores = (indice_productores + 1)%tam_buffer;
+            sem_post(&mutex_indice_productores);
+            sem_post(&hay_dato); // Señalamos que ha entrado un nuevo dato
+
+            sem_wait(&mutex_contador_datos); // Exclusión mutua contador datos
+            contador_datos++;
+            sem_post(&mutex_contador_datos);
+            // Incrementamos contador
+            contador_caracteres[nuevo_dato.c - 'a']++;
         }
         else
         {
+            totales++;
             invalidos++;
         }
     }
@@ -441,100 +465,187 @@ void* productor(void* args)
         fprintf(stderr, "Error al cerrar el fichero número %d.\n", dato_args.id_hilo);
         exit(1);
     }
-    printf("Invalidos: %d. Válidos: %d\n", invalidos, validos);
-    printf("Productor %d termina.\n", dato_args.id_hilo);
     pthread_exit(NULL);
 }
 
 void* consumidor(void* args)
 {
-    DATO_LISTA_ENLAZADA nuevo_dato;
+    DATO_LISTA_ENLAZADA dato_lista_enlazada;
     DATO_BUFFER dato_buffer;
-    int sigue = 1;
+
     int contador_caracteres[10];
     int contador_proveedores[MAX_PRODUCTORES];
     int id_hilo = *(int*) args;
 
-    while(sigue)
+
+
+    while(1)
     {
         sem_wait(&mutex_contador_productores);
-        if(contador_productores == total_productores)
+        sem_wait(&mutex_contador_datos);
+        if((contador_productores == 0 && contador_datos == 0))
         {
+            printf("Termina %d.\n", id_hilo);
+            sem_wait(&mutex_bandera_terminado);
+            bandera_consumidores_terminado = 1;
+            sem_post(&mutex_bandera_terminado);
+            sem_post(&mutex_contador_datos);
             sem_post(&mutex_contador_productores);
-            sigue = 0;
-            nuevo_dato.id_consumidor = id_hilo;
-            for(int i = 0; i < MAX_PRODUCTORES; i++)
-            {
-                nuevo_dato.ids_proveedor[i] = contador_proveedores[i];
+            sem_wait(&mutex_contador_datos);
+            contador_datos++;
+            sem_post(&mutex_contador_datos);
+            sem_post(&hay_dato);
+
+            dato_lista_enlazada.id_consumidor = id_hilo;
+            for(int i = 0; i < 10; i++) {
+                dato_lista_enlazada.tipos[i] = contador_caracteres[i];
             }
-            for(int i = 0; i < 10; i++)
+            for(int i = 0; i < num_productores; i++)
             {
-                nuevo_dato.tipos[i] = contador_caracteres[i];
+                dato_lista_enlazada.ids_proveedor[i] = contador_proveedores[i];
             }
-            lista_enlazada[0] = nuevo_dato;
+
+            sem_wait(&mutex_indice_lista_enlazada);
+            lista_enlazada[indice_lista_enlazada++] = dato_lista_enlazada;
             sem_post(&mutex_indice_lista_enlazada);
+            sem_post(&hay_dato_lista_enlazada);
+            pthread_exit(NULL);
         }
         else
         {
+            sem_post(&mutex_contador_datos);
             sem_post(&mutex_contador_productores);
+
             sem_wait(&hay_dato);
             sem_wait(&mutex_indice_consumidores);
             dato_buffer = buffer_compartido[indice_consumidores];
             indice_consumidores = (indice_consumidores + 1) % tam_buffer;
+            sem_wait(&mutex_contador_datos);
+            contador_datos--;
+            sem_post(&mutex_contador_datos);
             sem_post(&mutex_indice_consumidores);
             sem_post(&hay_espacio);
-            if (dato_buffer.c == EOF)
+            sem_wait(&mutex_bandera_terminado);
+            if(!bandera_consumidores_terminado)
             {
-                sem_wait(&mutex_contador_productores);
-                printf("Encontrado el EOF número %d.\n", contador_productores);
-                contador_productores++;
-                sem_post(&mutex_contador_productores);
+                sem_post(&mutex_bandera_terminado);
+                contador_caracteres[dato_buffer.c - 'a']++;
+                contador_proveedores[dato_buffer.id_hilo]++;
             }
             else
             {
-                contador_proveedores[dato_buffer.id_hilo]++;
-                contador_caracteres[dato_buffer.c - 'a']++;
+                sem_post(&mutex_bandera_terminado);
             }
 
         }
     }
-    printf("Consumidor %d termina.\n", id_hilo);
-    pthread_exit(NULL);
 }
 
 void* facturador(void* args)
 {
-    FILE* fichero_salida;
     DATO_LISTA_ENLAZADA dato_lista_enlazada;
-    int i, total = 0;
-    char cadena_fichero[512];
-    char cadena_aux[64];
+    int indice = 0;
+    int contador_local = 0;
+    int maximo_consumidor;
+    char cadena_inicial[128];
+    char cadena_imprimible[10][32];
+    char cadenas_finales[num_productores][64];
+    int totales[contador_productores];
+    int maximo = 0;
+    int sigue = 1;
+    int total;
+    int totales_proveedor[num_productores];
+    FILE* fichero_salida;
     fichero_salida = (FILE*) args;
-    sem_wait(&mutex_indice_lista_enlazada);
 
-    for(i = 0; i < total_consumidores; i++)
+
+    while(sigue)
     {
-        dato_lista_enlazada = lista_enlazada[i];
+        total = 0;
+        sem_wait(&hay_dato_lista_enlazada);
+        dato_lista_enlazada = lista_enlazada[indice++];
+
+
+
+        // Obtenemos el total de datos consumidos
+        for(int i = 0; i < num_productores; i++)
+        {
+            total += dato_lista_enlazada.ids_proveedor[i];
+            totales[i] += dato_lista_enlazada.ids_proveedor[i];
+
+        }
+        totales[dato_lista_enlazada.id_consumidor] = total;
+        if(maximo < total)
+        {
+            maximo = total;
+            maximo_consumidor = dato_lista_enlazada.id_consumidor;
+        }
+        for (int i = 0; i < 10; i++)
+        {
+            sprintf(cadena_imprimible[i], "Producto tipo \"%c\": %d\n", i + 'a', dato_lista_enlazada.tipos[i]);
+        }
+
+
+        sprintf(cadena_inicial, "Cliente consumidor %d:\n"
+                                "Productos consumidos: %d. De los cuales:\n",
+                                dato_lista_enlazada.id_consumidor, total);
+
+        if(fwrite(cadena_inicial, 128, 1, fichero_salida) == 0)
+        {
+            fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
+            exit(1);
+        }
+        for(int i = 0; i < 10; i++)
+        {
+            if(fwrite(cadena_imprimible[i], 64, 1, fichero_salida) == 0)
+            {
+                fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
+                exit(1);
+            }
+
+        }
+        contador_local++;
+        if(num_consumidores == contador_local)
+        {
+            sigue = 0;
+        }
     }
-    for(i = 0; i < 10; i++)
+    total = 0;
+    for(int i = 0; i < contador_productores; i++)
     {
-        total += dato_lista_enlazada.tipos[i];
+        total += totales[i];
     }
-    sprintf(cadena_fichero, "Cliente consumidor %d:\n"
-                            "Productos consumidos: %d. De los cuales:\n",
-                            dato_lista_enlazada.id_consumidor, total);
 
-    sem_wait(&mutex_fichero_salida);
-
-    sem_post(&mutex_fichero_salida);
-
-
-
-
-
-
-
-
+    if(fwrite("Total de productos consumidos: ", 32, 1, fichero_salida) == 0)
+    {
+        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
+        exit(1);
+    }
+    if(fwrite(&total, 4, 1, fichero_salida) == 0)
+    {
+        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
+        exit(1);
+    }
+    if(fwrite("\n", 2, 1, fichero_salida) == 0)
+    {
+        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
+        exit(1);
+    }
+    for(int i = 0; i < num_productores; i++)
+    {
+        sprintf(cadenas_finales[i], "%d del proveedor %d.\n", totales_proveedor[i], i);
+        fwrite(cadenas_finales[i], 64, 1, fichero_salida);
+    }
+    if(fwrite("Cliente consumidor que más ha consumido: ", 64, 1, fichero_salida) == 0)
+    {
+        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
+        exit(1);
+    }
+    if(fwrite(&maximo_consumidor, 1, 1, fichero_salida) == 0)
+    {
+        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
+        exit(1);
+    }
     pthread_exit(NULL);
 }
 
@@ -556,7 +667,7 @@ DATO_BUFFER crear_dato_buffer(FILE* fp, int id_hilo)
     {
         nuevo_dato.c = EOF;
         nuevo_dato.id_hilo = -1; // Nos da igual de qué hilo venga EOF, sabemos que tienen que llegar un total
-                                 // de num_productores EOF's
+        // de num_productores EOF's
     }
     return nuevo_dato;
 
@@ -566,5 +677,3 @@ int caracter_valido(char c)
 {
     return (c >= 'a' && c <= 'j');
 }
-
-
