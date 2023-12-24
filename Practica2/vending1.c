@@ -415,9 +415,6 @@ void* productor(void* args)
             indice_productores = (indice_productores + 1)%tam_buffer;
             sem_post(&mutex_indice_productores);
             sem_post(&hay_dato); // Señalamos que ha entrado un nuevo dato
-            sem_wait(&mutex_contador_productores);
-            contador_productores--;
-            sem_post(&mutex_contador_productores);
 
             sigue = 0;
             sprintf(cadena_imprimible_fichero, "Proveedor %d:\n"
@@ -487,17 +484,17 @@ void* consumidor(void* args)
     int id_hilo = *(int*) args;
 
     if ((nodo_consumidor = (NODO*)malloc(sizeof(NODO))) == NULL) {
+        fprintf(stderr, "Error al crear el nodo consumidor.\n");
         exit(1);
     }
     if ((nodo_consumidor -> ids_proveedor = (int*) malloc (num_productores*sizeof(int))) == NULL) {
-        // TODO: fprintfs
+        fprintf(stderr, "Error al crear el vector de ids de proveedor.\n");
         exit(1);
     }
     nodo_consumidor->id_consumidor = id_hilo;
 
     while(1)
     {
-        
         sem_wait(&hay_dato);
         sem_wait(&mutex_contador_productores);
         if (!contador_productores) {
@@ -507,18 +504,29 @@ void* consumidor(void* args)
             indice_consumidores++;
             sem_post(&mutex_indice_consumidores);
             printf("cerrando cons %d\n", id_hilo);
-            
+
             pthread_exit(NULL);
         } else {
             sem_post(&mutex_contador_productores);
             sem_wait(&mutex_indice_consumidores);
             if ((dato_buffer = buffer_compartido[indice_consumidores%tam_buffer]).c == EOF) {
                 indice_consumidores++;
+                printf("Recojo EOF\n");
                 sem_post(&mutex_indice_consumidores);
 
-                printf("Recojo EOF\n");
                 sem_post(&hay_espacio);
 
+                sem_wait(&mutex_contador_productores);
+                contador_productores--;
+                if (!contador_productores) {
+                    // Para solucionar caso en que productor sale,
+                    // se manda señal hay_espacio pero no se recoge,
+                    // y consumidor espera que haya espacio
+                    sem_post(&mutex_contador_productores);
+                    sem_post(&hay_dato);
+
+                }
+                sem_post(&mutex_contador_productores);
             } else {
                 indice_consumidores++;
                 sem_post(&mutex_indice_consumidores);
