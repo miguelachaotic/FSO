@@ -10,7 +10,6 @@
 #define MAX_BUFFER 5000
 
 
-
 typedef struct dato_buffer
 {
     char c;
@@ -21,20 +20,24 @@ typedef struct dato_productor
 {
     int id_hilo; // identificación del hilo que produce datos
     char *path;
-    FILE* fichero_salida; // Puntero al fichero donde escribe datos
+    FILE *fichero_salida; // Puntero al fichero donde escribe datos
 
 } DATO_PRODUCTOR;
 
 typedef struct dato_lista_enlazada
 {
-    int caracteres[10]; // Los tipos de datos que se han consumido
+    int caracteres[10];     // Los tipos de datos que se han consumido
     int *ids_proveedor;
     int id_consumidor;
     int total;
 
     struct dato_lista_enlazada *sig;
-
 } NODO;
+typedef struct lista_enlazada
+{
+    NODO *primero;
+    NODO *ultimo;
+} LISTA_ENLAZADA;
 
 
 
@@ -73,7 +76,7 @@ sem_t mutex_fichero_salida;
 
 sem_t mutex_bandera_terminado;
 
-sem_t mutex_indice_lista_enlazada;
+sem_t mutex_lista_enlazada;
 
 sem_t hay_dato_lista_enlazada;
 
@@ -99,7 +102,7 @@ int num_productores;
 
 int bandera_consumidores_terminado = 0;
 
-NODO lista_enlazada[MAX_CONSUMIDORES]; //Para hacer pruebas usamos un vector primero
+LISTA_ENLAZADA *lista_enlazada; //Para hacer pruebas usamos un vector primero
 
 int main(int argc, char** argv)
 {
@@ -193,33 +196,32 @@ int main(int argc, char** argv)
     }
     free(ficheros_entrada);
     //En ficheros_entrada están todos los punteros a FILE (FILE*) que ha pedido el usuario
-
-    // Buffer de tamaño tam_buffer de elementos tipo DATO
+// Buffer de tamaño tam_buffer de elementos tipo DATO
     if((buffer_compartido = (DATO_BUFFER*)malloc(tam_buffer*sizeof(DATO_BUFFER))) == NULL)
     {
         fprintf(stderr, "Error en la creación del buffer compartido.\n");
         exit(1);
     }
-
     if((hilos_productores = (pthread_t*)malloc(num_productores*sizeof(pthread_t))) == NULL)
     {
         fprintf(stderr, "Error en la creación del vector de hilos productores.\n");
         exit(1);
     }
-
     if((hilos_consumidores = (pthread_t*)malloc(num_consumidores*sizeof(pthread_t))) == NULL)
     {
         fprintf(stderr, "Error en la creación del vector de hilos consumidores.\n");
         exit(1);
     }
-
     if((datos_productores = (DATO_PRODUCTOR*)malloc(num_productores*sizeof(DATO_PRODUCTOR))) == NULL)
     {
         fprintf(stderr, "Error en la creación del vector de datos de los productores.\n");
         exit(1);
     }
-
-
+    if ((lista_enlazada = (LISTA_ENLAZADA*)malloc(sizeof(LISTA_ENLAZADA))) == NULL) 
+    {
+        fprintf(stderr, "Error al crear la lista enlazada.\n");
+        exit(1);
+    }
 
     if(sem_init(&hay_espacio, 0, tam_buffer))
     {
@@ -257,9 +259,9 @@ int main(int argc, char** argv)
         fprintf(stderr, "Error al inicializar el semáforo 'hay_dato_lista_enlazada'\n");
         exit(1);
     }
-    if(sem_init(&mutex_indice_lista_enlazada, 0, 1))
+    if(sem_init(&mutex_lista_enlazada, 0, 1))
     {
-        fprintf(stderr, "Error al inicializar el semáforo 'mutex_indice_lista_enlazada'\n");
+        fprintf(stderr, "Error al inicializar el semáforo 'mutex_lista_enlazada'\n");
         exit(1);
     }
     if(sem_init(&mutex_contador_datos, 0, 1))
@@ -418,13 +420,13 @@ void* productor(void* args)
 
             sigue = 0;
             sprintf(cadena_imprimible_fichero, "Proveedor %d:\n"
-                                               "Productos procesados: %d.\n"
-                                               "Productos inválidos: %d.\n"
-                                               "Productos válidos: %d.\n",
+                                               "\tProductos procesados: %d.\n"
+                                               "\tProductos inválidos: %d.\n"
+                                               "\tProductos válidos: %d.\n",
                     dato_args.id_hilo, totales, invalidos, validos);
             for(i = 0; i < 10; i++)
             {
-                sprintf(cadena_tipos_caracter[i], "%d de tipo \"%c\"\n", contador_caracteres[i], (char)(i + 'a'));
+                sprintf(cadena_tipos_caracter[i], "\t%d de tipo \"%c\"\n", contador_caracteres[i], (char)(i + 'a'));
             }
             // Exclusión mutua en el fichero de salida
             sem_wait(&mutex_fichero_salida);
@@ -483,11 +485,13 @@ void* consumidor(void* args)
 
     int id_hilo = *(int*) args;
 
-    if ((nodo_consumidor = (NODO*)malloc(sizeof(NODO))) == NULL) {
+    if ((nodo_consumidor = (NODO*)malloc(sizeof(NODO))) == NULL) 
+    {
         fprintf(stderr, "Error al crear el nodo consumidor.\n");
         exit(1);
     }
-    if ((nodo_consumidor -> ids_proveedor = (int*) malloc (num_productores*sizeof(int))) == NULL) {
+    if ((nodo_consumidor -> ids_proveedor = (int*) malloc (num_productores*sizeof(int))) == NULL) 
+    {
         fprintf(stderr, "Error al crear el vector de ids de proveedor.\n");
         exit(1);
     }
@@ -497,19 +501,37 @@ void* consumidor(void* args)
     {
         sem_wait(&hay_dato);
         sem_wait(&mutex_contador_productores);
-        if (!contador_productores) {
+        if (!contador_productores) 
+        {
+            // No quedan productores, habtá que terminar el proceso
             sem_post(&hay_dato);
             sem_post(&mutex_contador_productores);
+
             sem_wait(&mutex_indice_consumidores);
             indice_consumidores++;
             sem_post(&mutex_indice_consumidores);
-            printf("cerrando cons %d\n", id_hilo);
+
+            // Añadimos el nodo a la lista enlazada
+            sem_wait(&mutex_lista_enlazada);
+            if (!lista_enlazada->primero) {
+                lista_enlazada->primero = nodo_consumidor;
+                lista_enlazada->ultimo = nodo_consumidor;
+            } else {
+                lista_enlazada->ultimo->sig = nodo_consumidor;
+                lista_enlazada->ultimo = nodo_consumidor;
+            }
+            sem_post(&mutex_lista_enlazada);
+            sem_post(&hay_dato_lista_enlazada); // Mandamos la señal al facturador de que puede
+                                                // consumir el dato y terminamos el proceso
 
             pthread_exit(NULL);
         } else {
+            // Quedan productores activos
+
             sem_post(&mutex_contador_productores);
             sem_wait(&mutex_indice_consumidores);
-            if ((dato_buffer = buffer_compartido[indice_consumidores%tam_buffer]).c == EOF) {
+            if ((dato_buffer = buffer_compartido[indice_consumidores%tam_buffer]).c == EOF) 
+            {
                 indice_consumidores++;
                 printf("Recojo EOF\n");
                 sem_post(&mutex_indice_consumidores);
@@ -518,14 +540,11 @@ void* consumidor(void* args)
 
                 sem_wait(&mutex_contador_productores);
                 contador_productores--;
-                if (!contador_productores) {
-                    // Para solucionar caso en que productor sale,
-                    // se manda señal hay_espacio pero no se recoge,
-                    // y consumidor espera que haya espacio
-                    sem_post(&mutex_contador_productores);
-                    sem_post(&hay_dato);
 
-                }
+                // Para solucionar caso en que productor sale, se manda señal 
+                // hay_espacio pero no se recoge, y consumidor espera que haya espacio
+                if (!contador_productores) { sem_post(&hay_dato); }
+
                 sem_post(&mutex_contador_productores);
             } else {
                 indice_consumidores++;
@@ -534,10 +553,10 @@ void* consumidor(void* args)
                 caracter = dato_buffer.c;
                 proveedor = dato_buffer.id_hilo;
 
+                // Actualizamos los datos en el futuro nodo de la lista enlazada
                 nodo_consumidor->caracteres[caracter-'a']++;
                 nodo_consumidor->ids_proveedor[proveedor]++;
-
-                // TODO: AÑADE NODO
+                nodo_consumidor->total++;
 
                 sem_post(&hay_espacio);
             }
@@ -547,108 +566,33 @@ void* consumidor(void* args)
 
 void* facturador(void* args)
 {
-    NODO dato_lista_enlazada;
-    int indice = 0;
-    int contador_local = 0;
-    int maximo_consumidor;
-    char cadena_inicial[128];
-    char cadena_imprimible[10][32];
-    char cadenas_finales[num_productores][64];
-    int totales[contador_productores];
-    int maximo = 0;
+    NODO *dato_lista_enlazada;
     int sigue = 1;
-    int total;
-    int totales_proveedor[num_productores];
-    FILE* fichero_salida;
+    FILE *fichero_salida;
     fichero_salida = (FILE*) args;
-
 
     while(sigue)
     {
-        total = 0;
         sem_wait(&hay_dato_lista_enlazada);
-        dato_lista_enlazada = lista_enlazada[indice++];
+        sem_wait(&mutex_lista_enlazada);
+        dato_lista_enlazada = lista_enlazada->primero;
 
-
-
-        // Obtenemos el total de datos consumidos
-        for(int i = 0; i < num_productores; i++)
-        {
-            total += dato_lista_enlazada.ids_proveedor[i];
-            totales[i] += dato_lista_enlazada.ids_proveedor[i];
-
+        fprintf(fichero_salida, "Nodo cons %d\n", dato_lista_enlazada->id_consumidor);
+        fprintf(fichero_salida, "\ttotal: %d\n", dato_lista_enlazada->total);
+        for (int i = 0; i < num_productores; i++) {
+            fprintf(fichero_salida, "\tprod_%d: %d\n", i, dato_lista_enlazada->ids_proveedor[i]);
         }
-        totales[dato_lista_enlazada.id_consumidor] = total;
-        if(maximo < total)
-        {
-            maximo = total;
-            maximo_consumidor = dato_lista_enlazada.id_consumidor;
+        for (char i = 'a'; i <= 'j'; i++) {
+            fprintf(fichero_salida, "\t%c: %d\n", i, dato_lista_enlazada->caracteres[i-'a']);
         }
-        for (int i = 0; i < 10; i++)
-        {
-            sprintf(cadena_imprimible[i], "Producto tipo \"%c\": %d\n", i + 'a', dato_lista_enlazada.caracteres[i]);
-        }
+        lista_enlazada->primero = dato_lista_enlazada->sig;
+        sem_post(&mutex_lista_enlazada);
 
 
-        sprintf(cadena_inicial, "Cliente consumidor %d:\n"
-                                "Productos consumidos: %d. De los cuales:\n",
-                                dato_lista_enlazada.id_consumidor, total);
+        free(dato_lista_enlazada->ids_proveedor);
+        free(dato_lista_enlazada);
 
-        if(fwrite(cadena_inicial, 128, 1, fichero_salida) == 0)
-        {
-            fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
-            exit(1);
-        }
-        for(int i = 0; i < 10; i++)
-        {
-            if(fwrite(cadena_imprimible[i], 64, 1, fichero_salida) == 0)
-            {
-                fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
-                exit(1);
-            }
-
-        }
-        contador_local++;
-        if(num_consumidores == contador_local)
-        {
-            sigue = 0;
-        }
-    }
-    total = 0;
-    for(int i = 0; i < contador_productores; i++)
-    {
-        total += totales[i];
-    }
-
-    if(fwrite("Total de productos consumidos: ", 32, 1, fichero_salida) == 0)
-    {
-        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
-        exit(1);
-    }
-    if(fwrite(&total, 4, 1, fichero_salida) == 0)
-    {
-        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
-        exit(1);
-    }
-    if(fwrite("\n", 2, 1, fichero_salida) == 0)
-    {
-        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
-        exit(1);
-    }
-    for(int i = 0; i < num_productores; i++)
-    {
-        sprintf(cadenas_finales[i], "%d del proveedor %d.\n", totales_proveedor[i], i);
-        fwrite(cadenas_finales[i], 64, 1, fichero_salida);
-    }
-    if(fwrite("Cliente consumidor que más ha consumido: ", 64, 1, fichero_salida) == 0)
-    {
-        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
-        exit(1);
-    }
-    if(fwrite(&maximo_consumidor, 1, 1, fichero_salida) == 0)
-    {
-        fprintf(stderr, "Error al escribir en el fichero de salida por el facturador.\n");
-        exit(1);
+        if (!lista_enlazada->primero) { sigue = 0; }
     }
     pthread_exit(NULL);
 }
