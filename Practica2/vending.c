@@ -518,11 +518,14 @@ void* consumidor(void* args)
             sem_post(&mutex_indice_consumidores);
 
             // Añadimos el nodo a la lista enlazada
-            sem_wait(&mutex_lista_enlazada);
-            if (lista_enlazada->primero == NULL) {
+            sem_wait(&mutex_lista_enlazada);.
+            if (lista_enlazada->primero == NULL) 
+            {
                 lista_enlazada->primero = nodo_consumidor;
                 lista_enlazada->ultimo = nodo_consumidor;
-            } else {
+            } 
+            else 
+            {
                 lista_enlazada->ultimo->sig = nodo_consumidor;
                 lista_enlazada->ultimo = nodo_consumidor;
             }
